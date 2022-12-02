@@ -2,11 +2,22 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <time.h>
-#define VETOR_MAX 12
+#define VETOR_MAX 4000
 #define THREAD_MAX 4
-int parte = 0;
-int numeros[VETOR_MAX];
-int numeros_thread[THREAD_MAX][VETOR_MAX / THREAD_MAX];
+#define VETOR_THREAD VETOR_MAX / THREAD_MAX
+
+int Merge (int v[], int v1[], int v2[], int v1_tam, int v2_tam)
+{
+    int i, j, k;
+    for (i = 0, j = 0, k = 0; j < v1_tam && k < v2_tam; i++)
+    {
+        if(v1[j] <= v2[k]) v[i] = v1[j++];
+        else v[i] = v2[k++];
+    }
+    while (j < v1_tam) v[i++] = v1[j++];
+    while (k < v2_tam) v[i++] = v2[k++];
+    return 0;
+}
 
 int Merge_sort (int v[], int tam)
 {
@@ -25,62 +36,75 @@ int Merge_sort (int v[], int tam)
     return 0;
 }
 
-int Merge (int v[], int v1[], int v2[], int v1_tam, int v2_tam)
+void Merge_4_threads (int **vetor, int *v)
 {
-    int i, j, k;
-    for (i = 0, j = 0, k = 0; j < v1_tam && k < v2_tam; i++)
+    int *v1 = malloc(sizeof(int) * VETOR_MAX / 2);
+    int *v2 = malloc(sizeof(int) * VETOR_MAX / 2);
+    Merge(v1, vetor[0], vetor[1], VETOR_THREAD, VETOR_THREAD);
+    Merge(v2, vetor[2], vetor[3], VETOR_THREAD, VETOR_THREAD);
+    Merge(v, v1, v2, VETOR_MAX / 2, VETOR_MAX / 2);
+    free(v1);
+    free(v2);
+}
+
+int Numero_aleatorio (int **vetor, int x, int y)
+{
+    for (int i = 0; i < x; i++)
     {
-        if(v1[j] <= v2[k]) v[i] = v1[j++];
-        else v[i] = v2[k++];
-    }
-    while (j < v1_tam) v[i++] = v1[j++];
-    while (k < v2_tam) v[i++] = v2[k++];
-    return 0;
-}
-
-int Numero_aleatorio (int vetor[]) {
-    for (int i = 0; i < VETOR_MAX; i++) {
         srand((unsigned) time(NULL) + i);
-        vetor[i] = rand() % 10000 + 1;
+        for (int j = 0; j < y; j++)
+            vetor[i][j] = rand() % 99999 + 1;
     }
     return 0;
 }
 
-void Print_vetor (int vetor[])
+void* Merge_sort_multithread (void* vetor)
 {
-    for (int i = 0; i < VETOR_MAX / THREAD_MAX; i++)
-        printf("%d\n", vetor[i]);
-}
-
-void* Merge_sort_multithread (void* p){
-    int* a = (int*) p;
-    for (int i = 0; i < VETOR_MAX / THREAD_MAX; i++)
-        numeros_thread[*a][i] = numeros[parte++];
-
-    Merge_sort(numeros_thread[*a], VETOR_MAX / THREAD_MAX);
+    int *a = (int*) vetor;
+    Merge_sort(a, VETOR_THREAD);
     pthread_exit(NULL);
-
 }
 
-int main(int argc, char const *argv[])
+int **Malloc_matriz(size_t size, int x, int y)
 {
+    int **m = malloc(sizeof(size) * x);
+    for (int i = 0; i < x; i++)
+        m[i] = malloc(size * y);
+    return m;
+}
+
+int main()
+{
+    //Alocar um matriz de numero
+    int **numeros = Malloc_matriz(sizeof(int), THREAD_MAX, VETOR_THREAD);
+
     //Gerar numeros aleatorios
-    Numero_aleatorio(numeros);
+    Numero_aleatorio(numeros, THREAD_MAX, VETOR_THREAD);
 
     //Declarar um vetor de threads
     pthread_t threads[THREAD_MAX];
 
-
+    //Criar threads que ordena numeros
     for (int i = 0; i < THREAD_MAX; i++)
-        pthread_create(&threads[i], NULL, Merge_sort_multithread, (void*) &i);
+        pthread_create(&threads[i], NULL, Merge_sort_multithread, numeros[i]);
 
     for (int i = 0; i < THREAD_MAX; i++)
         pthread_join(threads[i], NULL);
 
+    int *resultado = malloc(sizeof(int) * VETOR_MAX);
+    Merge_4_threads(numeros, resultado);
+
+    //Gravar resultado em arquivo txt
+    FILE *file  = fopen("vetor_ordenado.txt", "w");
+    for (int i = 0; i < VETOR_MAX; i++)
+        fprintf(file, "%d\n", resultado[i]);
+
+    fclose(file);
+
     for (int i = 0; i < THREAD_MAX; i++)
-    {
-        for (int j = 0; j < VETOR_MAX / THREAD_MAX; j++)
-            printf("%d\n", numeros_thread[i][j]);
-    }
+        free(numeros[i]);
+        
+    free(numeros);
+    free(resultado);
     return 0;
 }
